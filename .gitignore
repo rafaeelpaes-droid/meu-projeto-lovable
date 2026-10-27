@@ -1,0 +1,9 @@
+# Node
+node_modules/
+.DS_Store
+
+# Vite
+/dist/
+
+# Logs
+npm-debug.log*
