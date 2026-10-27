@@ -1,189 +1,900 @@
-:root {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color: #e5eefb;
-  background: #07111f;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+import { useEffect, useMemo, useState } from 'react';
+
+type Route =
+  | 'welcome'
+  | 'auth'
+  | 'dashboard'
+  | 'create-room'
+  | 'room'
+  | 'chat'
+  | 'vip'
+  | 'admin';
+
+type Gender = 'Homem' | 'Mulher' | 'Pessoa não binária';
+type Role = 'principal' | 'avaliador';
+
+type UserProfile = {
+  name: string;
+  age: number;
+  city: string;
+  state: string;
+  bio: string;
+  interests: string[];
+  role: Role;
+  verified: boolean;
+  online: boolean;
+  vip: boolean;
+  credits: number;
+  avatar: string;
+  email: string;
+  phone: string;
+};
+
+type RoomParticipant = {
+  id: number;
+  name: string;
+  age: number;
+  city: string;
+  avatar: string;
+  verified: boolean;
+  status: 'ativo' | 'eliminado' | 'finalista';
+  balloon: boolean;
+};
+
+type Room = {
+  id: number;
+  title: string;
+  modality: 'Vídeo' | 'Foto + áudio';
+  participants: RoomParticipant[];
+  round: number;
+  status: 'procurando' | 'em apresentação' | 'em perguntas' | 'finalista' | 'concluida';
+  creditsCost: number;
+};
+
+type NotificationItem = {
+  id: number;
+  title: string;
+  body: string;
+  time: string;
+};
+
+type Match = {
+  id: number;
+  name: string;
+  city: string;
+  avatar: string;
+  status: 'pendente' | 'ativo' | 'VIP';
+};
+
+const demoUser: UserProfile = {
+  name: 'Camila A.',
+  age: 27,
+  city: 'São Paulo',
+  state: 'SP',
+  bio: 'Amante de música, viagens e conversas profundas.',
+  interests: ['Música', 'Cinema', 'Viagens', 'Gastronomia'],
+  role: 'principal',
+  verified: true,
+  online: true,
+  vip: true,
+  credits: 180,
+  avatar: 'CA',
+  email: 'camila@demo.app',
+  phone: '+55 11 99999-1234',
+};
+
+const demoParticipants: RoomParticipant[] = [
+  { id: 1, name: 'Ana', age: 24, city: 'SP', avatar: 'AN', verified: true, status: 'ativo', balloon: true },
+  { id: 2, name: 'Lívia', age: 29, city: 'Campinas', avatar: 'LI', verified: false, status: 'ativo', balloon: true },
+  { id: 3, name: 'Beatriz', age: 26, city: 'Santos', avatar: 'BE', verified: true, status: 'ativo', balloon: true },
+  { id: 4, name: 'Valentina', age: 25, city: 'São Paulo', avatar: 'VA', verified: true, status: 'ativo', balloon: true },
+  { id: 5, name: 'Joana', age: 28, city: 'Osasco', avatar: 'JO', verified: true, status: 'ativo', balloon: true },
+];
+
+const demoRoom: Room = {
+  id: 1,
+  title: 'Salão de encontros com perfil premium',
+  modality: 'Vídeo',
+  participants: demoParticipants,
+  round: 2,
+  status: 'em perguntas',
+  creditsCost: 120,
+};
+
+const demoNotifications: NotificationItem[] = [
+  { id: 1, title: 'Convite recebido', body: 'Você foi convidada para a sala de Valentina.', time: '2 min atrás' },
+  { id: 2, title: 'Match confirmado', body: 'Você e Davi deram match ontem.', time: '1h atrás' },
+  { id: 3, title: 'Voucher liberado', body: 'Seu benefício café + sobremesa está pronto.', time: 'Hoje' },
+];
+
+const demoMatches: Match[] = [
+  { id: 1, name: 'Davi', city: 'São Paulo', avatar: 'DA', status: 'ativo' },
+  { id: 2, name: 'Rafael', city: 'Campinas', avatar: 'RA', status: 'VIP' },
+  { id: 3, name: 'Mateus', city: 'Osasco', avatar: 'MA', status: 'pendente' },
+];
+
+const partnerBenefits = [
+  { id: 1, name: 'Café Bossa', discount: '20% off', description: 'Voucher válido para encontros em dupla', location: 'Pinheiros - SP' },
+  { id: 2, name: 'Sabor & Co.', discount: '15% off', description: 'Desconto em pratos especiais', location: 'Vila Mariana - SP' },
+  { id: 3, name: 'Vista Cinema', discount: '30% off', description: 'Entrada dupla em sessões de segunda', location: 'Jardins - SP' },
+];
+
+const adminMetrics = [
+  { label: 'Usuários ativos', value: '48.2k' },
+  { label: 'Salas concluídas', value: '8.4k' },
+  { label: 'Matches', value: '3.1k' },
+  { label: 'Assinaturas VIP', value: '12.6%' },
+];
+
+const adminUsers = [
+  { name: 'Camila A.', status: 'Ativa', plan: 'VIP', risk: 'Baixo' },
+  { name: 'Thiago', status: 'Pendência', plan: 'Gratuito', risk: 'Médio' },
+  { name: 'Larissa', status: 'Ativa', plan: 'VIP', risk: 'Baixo' },
+  { name: 'Pedro', status: 'Bloqueado', plan: 'Gratuito', risk: 'Alto' },
+];
+
+function App() {
+  const [route, setRoute] = useState<Route>('welcome');
+  const [user, setUser] = useState<UserProfile>(() => {
+    const saved = localStorage.getItem('balloon-demo-user');
+    return saved ? JSON.parse(saved) : demoUser;
+  });
+  const [form, setForm] = useState({
+    displayName: 'Camila A.',
+    birthDate: '1998-04-12',
+    email: 'camila@demo.app',
+    phone: '+55 11 99999-1234',
+    password: 'Senha@123',
+    acceptTerms: true,
+    gender: 'Mulher' as Gender,
+    lookingFor: 'Homens',
+    city: 'São Paulo',
+    state: 'SP',
+    bio: 'Adoro conversas leves, música e encontros autênticos.',
+    objective: 'Namoro sério',
+  });
+  const [activeScreen, setActiveScreen] = useState<'login' | 'cadastro'>('cadastro');
+  const [signupStep, setSignupStep] = useState(1);
+  const [room, setRoom] = useState<Room>(demoRoom);
+  const [selectedPlan, setSelectedPlan] = useState<'free' | 'vip'>('vip');
+
+  useEffect(() => {
+    localStorage.setItem('balloon-demo-user', JSON.stringify(user));
+  }, [user]);
+
+  const roomMembersLeft = useMemo(
+    () => room.participants.filter((person) => person.balloon).length,
+    [room],
+  );
+
+  const handleBurstBalloon = (id: number) => {
+    setRoom((current) => ({
+      ...current,
+      participants: current.participants.map((person) =>
+        person.id === id ? { ...person, balloon: false, status: 'eliminado' } : person,
+      ),
+    }));
+  };
+
+  const renderMainView = () => {
+    switch (route) {
+      case 'welcome':
+        return (
+          <WelcomeScreen
+            onGoToLogin={() => {
+              setActiveScreen('login');
+              setRoute('auth');
+            }}
+            onGoToSignup={() => {
+              setActiveScreen('cadastro');
+              setRoute('auth');
+            }}
+            onOpenDashboard={() => setRoute('dashboard')}
+          />
+        );
+      case 'auth':
+        return (
+          <AuthScreen
+            activeScreen={activeScreen}
+            setActiveScreen={setActiveScreen}
+            form={form}
+            setForm={setForm}
+            signupStep={signupStep}
+            setSignupStep={setSignupStep}
+            onFinish={() => {
+              setUser({
+                ...user,
+                name: form.displayName || user.name,
+                city: form.city || user.city,
+                email: form.email || user.email,
+                bio: form.bio || user.bio,
+              });
+              setRoute('dashboard');
+            }}
+          />
+        );
+      case 'dashboard':
+        return (
+          <DashboardScreen
+            user={user}
+            notifications={demoNotifications}
+            matches={demoMatches}
+            room={demoRoom}
+            onCreateRoom={() => setRoute('create-room')}
+            onGoToRoom={() => setRoute('room')}
+            onGoToVip={() => setRoute('vip')}
+            onGoToAdmin={() => setRoute('admin')}
+            onToggleOnline={() => setUser((current) => ({ ...current, online: !current.online }))}
+          />
+        );
+      case 'create-room':
+        return <CreateRoomScreen onBegin={() => setRoute('room')} />;
+      case 'room':
+        return (
+          <RoomScreen
+            room={room}
+            roomMembersLeft={roomMembersLeft}
+            onBurstBalloon={handleBurstBalloon}
+            onFinishRound={() => setRoom((current) => ({ ...current, round: Math.min(current.round + 1, 6) }))}
+            onGoToChat={() => setRoute('chat')}
+          />
+        );
+      case 'chat':
+        return <ChatScreen user={user} onGoBack={() => setRoute('dashboard')} />;
+      case 'vip':
+        return <VipScreen selectedPlan={selectedPlan} setSelectedPlan={setSelectedPlan} onGoToDashboard={() => setRoute('dashboard')} />;
+      case 'admin':
+        return <AdminScreen />;
+      default:
+        return null;
+    }
+  };
+
+  return <div className="app-shell">{renderMainView()}</div>;
 }
 
-* {
-  box-sizing: border-box;
+function WelcomeScreen({
+  onGoToLogin,
+  onGoToSignup,
+  onOpenDashboard,
+}: {
+  onGoToLogin: () => void;
+  onGoToSignup: () => void;
+  onOpenDashboard: () => void;
+}) {
+  return (
+    <div className="welcome-screen">
+      <header className="topbar">
+        <div className="brand-wrap">
+          <div className="brand-mark">B</div>
+          <div>
+            <div className="eyebrow">App em demonstração</div>
+            <strong>Balão Match</strong>
+          </div>
+        </div>
+        <button className="ghost-button" onClick={onOpenDashboard}>Entrar no painel</button>
+      </header>
+
+      <main className="hero-section">
+        <div className="hero-copy">
+          <span className="pill">Relacionamento moderno</span>
+          <h1>Descubra conexões com energia, confiança e balões que revelam interesse.</h1>
+          <p>
+            Uma experiência de relacionamento pensada para encontros e dinâmica de grupos, com painel de
+            disponibilidade, sala de avaliação, matches e clube VIP.
+          </p>
+          <div className="cta-row">
+            <button className="primary-button" onClick={onGoToSignup}>Quero ser visto</button>
+            <button className="secondary-button" onClick={onGoToLogin}>Quero avaliar pessoas</button>
+          </div>
+          <div className="mini-stats">
+            <div>
+              <strong>5</strong>
+              <span>avaliadores</span>
+            </div>
+            <div>
+              <strong>6</strong>
+              <span>rodadas</span>
+            </div>
+            <div>
+              <strong>VIP</strong>
+              <span>benefícios</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="hero-preview">
+          <div className="preview-card large">
+            <div className="tag-row">
+              <span>Live</span>
+              <span>Verificado</span>
+            </div>
+            <div className="profile-panel">
+              <div className="avatar large-avatar">CA</div>
+              <div>
+                <h3>Camila A.</h3>
+                <p>27 anos • São Paulo</p>
+              </div>
+            </div>
+            <div className="balloons">
+              {['A', 'B', 'C', 'D', 'E'].map((balloon) => (
+                <span key={balloon} className="balloon-item">
+                  {balloon}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
 }
 
-html, body, #root {
-  margin: 0;
-  min-height: 100%;
-  min-height: 100vh;
+function AuthScreen({
+  activeScreen,
+  setActiveScreen,
+  form,
+  setForm,
+  signupStep,
+  setSignupStep,
+  onFinish,
+}: {
+  activeScreen: 'login' | 'cadastro';
+  setActiveScreen: (screen: 'login' | 'cadastro') => void;
+  form: any;
+  setForm: React.Dispatch<React.SetStateAction<any>>;
+  signupStep: number;
+  setSignupStep: (value: number) => void;
+  onFinish: () => void;
+}) {
+  const canContinue = signupStep < 4;
+
+  return (
+    <div className="auth-screen">
+      <div className="auth-card">
+        <div className="auth-header">
+          <div className="brand-mark small">B</div>
+          <div>
+            <h2>{activeScreen === 'cadastro' ? 'Criar conta' : 'Entrar'}</h2>
+            <p>Modo demonstração • sem integração real de identidade</p>
+          </div>
+        </div>
+
+        <div className="tab-group">
+          <button className={activeScreen === 'cadastro' ? 'tab-button active' : 'tab-button'} onClick={() => setActiveScreen('cadastro')}>
+            Cadastro
+          </button>
+          <button className={activeScreen === 'login' ? 'tab-button active' : 'tab-button'} onClick={() => setActiveScreen('login')}>
+            Login
+          </button>
+        </div>
+
+        {activeScreen === 'login' ? (
+          <div className="auth-form apply-gap">
+            <label>
+              E-mail
+              <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </label>
+            <label>
+              Senha
+              <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            </label>
+            <button className="primary-button full" onClick={onFinish}>Entrar</button>
+          </div>
+        ) : (
+          <div className="signup-shell">
+            <div className="signup-progress">
+              {[1, 2, 3, 4].map((step) => (
+                <span key={step} className={step <= signupStep ? 'progress-dot active' : 'progress-dot'} />
+              ))}
+            </div>
+
+            {signupStep === 1 && (
+              <div className="auth-form apply-gap">
+                <label>
+                  Nome de exibição
+                  <input value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} />
+                </label>
+                <label>
+                  Data de nascimento
+                  <input type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} />
+                </label>
+                <label>
+                  E-mail
+                  <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                </label>
+                <label>
+                  Telefone celular
+                  <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                </label>
+                <label>
+                  Senha
+                  <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                </label>
+                <label className="checkbox-row">
+                  <input type="checkbox" checked={form.acceptTerms} onChange={(e) => setForm({ ...form, acceptTerms: e.target.checked })} />
+                  Aceito os termos e política de privacidade.
+                </label>
+              </div>
+            )}
+
+            {signupStep === 2 && (
+              <div className="auth-form apply-gap">
+                <label>
+                  Gênero
+                  <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+                    <option>Homem</option>
+                    <option>Mulher</option>
+                    <option>Pessoa não binária</option>
+                  </select>
+                </label>
+                <label>
+                  Quero conhecer
+                  <select value={form.lookingFor} onChange={(e) => setForm({ ...form, lookingFor: e.target.value })}>
+                    <option>Homens</option>
+                    <option>Mulheres</option>
+                    <option>Pessoas não binárias</option>
+                    <option>Pessoas de todos os gêneros</option>
+                  </select>
+                </label>
+              </div>
+            )}
+
+            {signupStep === 3 && (
+              <div className="auth-form apply-gap">
+                <label>
+                  Cidade
+                  <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+                </label>
+                <label>
+                  Estado
+                  <input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
+                </label>
+                <label>
+                  Descrição pessoal
+                  <textarea value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} />
+                </label>
+                <label>
+                  Objetivo de relacionamento
+                  <select value={form.objective} onChange={(e) => setForm({ ...form, objective: e.target.value })}>
+                    <option>Namoro sério</option>
+                    <option>Conhecer pessoas</option>
+                    <option>Encontros casuais</option>
+                  </select>
+                </label>
+              </div>
+            )}
+
+            {signupStep === 4 && (
+              <div className="auth-form apply-gap">
+                <div className="verification-box">
+                  <strong>Verificação de identidade</strong>
+                  <p>Em produção, esse fluxo será integrado com um provedor externo de KYC.</p>
+                  <ul>
+                    <li>Documento oficial</li>
+                    <li>Selfie com prova de vida</li>
+                    <li>Comparação facial</li>
+                  </ul>
+                </div>
+                <button className="primary-button full" onClick={onFinish}>Concluir cadastro</button>
+              </div>
+            )}
+
+            <div className="nav-bar">
+              <button className="ghost-button" onClick={() => setSignupStep(Math.max(1, signupStep - 1))} disabled={signupStep === 1}>
+                Voltar
+              </button>
+              {canContinue ? (
+                <button className="primary-button" onClick={() => setSignupStep(signupStep + 1)}>
+                  Continuar
+                </button>
+              ) : (
+                <button className="primary-button" onClick={onFinish}>Finalizar</button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
-body {
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at top, rgba(96, 165, 250, 0.25), transparent 35%),
-    linear-gradient(135deg, #020817 0%, #0f172a 45%, #111827 100%);
+function DashboardScreen({
+  user,
+  notifications,
+  matches,
+  room,
+  onCreateRoom,
+  onGoToRoom,
+  onGoToVip,
+  onGoToAdmin,
+  onToggleOnline,
+}: {
+  user: UserProfile;
+  notifications: NotificationItem[];
+  matches: Match[];
+  room: Room;
+  onCreateRoom: () => void;
+  onGoToRoom: () => void;
+  onGoToVip: () => void;
+  onGoToAdmin: () => void;
+  onToggleOnline: () => void;
+}) {
+  return (
+    <div className="dashboard-shell">
+      <aside className="sidebar">
+        <div className="brand-mark">B</div>
+        <nav className="nav-menu">
+          <button className="nav-item active">Painel</button>
+          <button className="nav-item">Salas</button>
+          <button className="nav-item">Matches</button>
+          <button className="nav-item">Chat</button>
+          <button className="nav-item" onClick={onGoToVip}>VIP</button>
+          <button className="nav-item" onClick={onGoToAdmin}>Admin</button>
+        </nav>
+      </aside>
+
+      <main className="dashboard-main">
+        <header className="dashboard-header">
+          <div>
+            <p className="eyebrow">Olá, {user.name}</p>
+            <h2>Painel inicial</h2>
+          </div>
+          <div className="status-box">
+            <span className={user.online ? 'status-pill online' : 'status-pill offline'}>
+              {user.online ? 'Disponível agora' : 'Offline'}
+            </span>
+            <button className="ghost-button" onClick={onToggleOnline}>Alterar disponibilidade</button>
+          </div>
+        </header>
+
+        <section className="top-grid">
+          <div className="profile-card panel">
+            <div className="user-avatar">{user.avatar}</div>
+            <div>
+              <div className="row-between">
+                <h3>{user.name}</h3>
+                {user.verified && <span className="verified-badge">Verificado</span>}
+              </div>
+              <p>{user.city} • {user.age} anos</p>
+              <p>{user.bio}</p>
+            </div>
+          </div>
+
+          <div className="actions-card panel">
+            <button className="primary-button full" onClick={onCreateRoom}>Quero ser visto</button>
+            <button className="secondary-button full" onClick={onGoToRoom}>Avaliar pessoas</button>
+            <div className="mini-state">
+              <span>Crédito disponível</span>
+              <strong>{user.credits} créditos</strong>
+            </div>
+          </div>
+        </section>
+
+        <section className="stats-grid">
+          <StatCard label="Salas disponíveis" value="12" detail="3 novas hoje" />
+          <StatCard label="Convites" value="08" detail="2 pendentes" />
+          <StatCard label="Matches" value={String(matches.length)} detail="1 novo" />
+          <StatCard label="VIP" value={user.vip ? 'Ativo' : 'Gratuito'} detail={user.vip ? 'Plano premium' : 'Upgrade disponível'} />
+        </section>
+
+        <section className="content-grid">
+          <div className="panel">
+            <div className="section-header">
+              <h3>Salas disponíveis</h3>
+              <button className="link-button" onClick={onCreateRoom}>Criar sala</button>
+            </div>
+            <div className="room-card">
+              <div>
+                <p className="eyebrow">Sala ativa</p>
+                <h4>{room.title}</h4>
+              </div>
+              <div className="row-between compact-row">
+                <span>{room.modality}</span>
+                <span>{room.participants.length} participantes</span>
+              </div>
+              <button className="primary-button full" onClick={onGoToRoom}>Entrar na sala</button>
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="section-header">
+              <h3>Notificações</h3>
+            </div>
+            <div className="stack-list">
+              {notifications.map((notification) => (
+                <div key={notification.id} className="stack-item">
+                  <strong>{notification.title}</strong>
+                  <p>{notification.body}</p>
+                  <span>{notification.time}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="panel matches-panel">
+          <div className="section-header">
+            <h3>Matches</h3>
+            <button className="link-button">Ver todos</button>
+          </div>
+          <div className="match-grid">
+            {matches.map((match) => (
+              <div key={match.id} className="match-card">
+                <div className="avatar small-avatar">{match.avatar}</div>
+                <div>
+                  <strong>{match.name}</strong>
+                  <p>{match.city}</p>
+                </div>
+                <span className={match.status === 'VIP' ? 'tiny-pill vip' : 'tiny-pill'}>{match.status}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
+    </div>
+  );
 }
 
-button {
-  font: inherit;
+function CreateRoomScreen({ onBegin }: { onBegin: () => void }) {
+  return (
+    <div className="page-panel">
+      <div className="form-card panel">
+        <div className="section-header">
+          <h2>Criar sala</h2>
+          <span className="tiny-pill">Configuração</span>
+        </div>
+
+        <div className="form-grid">
+          <label>
+            País
+            <input value="Brasil" readOnly />
+          </label>
+          <label>
+            Estado
+            <input value="São Paulo" readOnly />
+          </label>
+          <label>
+            Cidade
+            <input value="São Paulo" readOnly />
+          </label>
+          <label>
+            Alcance
+            <select>
+              <option>15 km</option>
+              <option>25 km</option>
+              <option>50 km</option>
+            </select>
+          </label>
+          <label>
+            Gênero do grupo
+            <select>
+              <option>Mulheres</option>
+              <option>Homens</option>
+              <option>Pessoas não binárias</option>
+              <option>Todos</option>
+            </select>
+          </label>
+          <label>
+            Modalidade
+            <select>
+              <option>Vídeo</option>
+              <option>Foto + áudio</option>
+            </select>
+          </label>
+          <label>
+            Vagas esperadas
+            <input value="5 avaliadores" readOnly />
+          </label>
+          <label>
+            Custo em créditos
+            <input value="120 créditos" readOnly />
+          </label>
+        </div>
+
+        <div className="summary-box">
+          <strong>Resumo do início</strong>
+          <p>Busca por 5 avaliadores compatíveis, com regras claras e compensação de 50% em caso de sem match.</p>
+        </div>
+
+        <div className="nav-bar">
+          <button className="ghost-button">Cancelar</button>
+          <button className="primary-button" onClick={onBegin}>Iniciar busca</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-.page-shell {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2rem;
-  padding: 2rem;
-  flex-wrap: wrap;
+function RoomScreen({
+  room,
+  roomMembersLeft,
+  onBurstBalloon,
+  onFinishRound,
+  onGoToChat,
+}: {
+  room: Room;
+  roomMembersLeft: number;
+  onBurstBalloon: (id: number) => void;
+  onFinishRound: () => void;
+  onGoToChat: () => void;
+}) {
+  return (
+    <div className="page-panel room-panel">
+      <div className="live-header panel">
+        <div>
+          <p className="eyebrow">Sala ativa</p>
+          <h2>{room.title}</h2>
+        </div>
+        <div className="live-meta">
+          <span>Rodada {room.round}/6</span>
+          <span>{roomMembersLeft} balões ativos</span>
+        </div>
+      </div>
+
+      <div className="participants-grid">
+        {room.participants.map((participant) => (
+          <div key={participant.id} className="participant-card panel">
+            <div className="avatar small-avatar">{participant.avatar}</div>
+            <div>
+              <strong>{participant.name}</strong>
+              <p>{participant.age} anos • {participant.city}</p>
+            </div>
+            <div className="row-end">
+              <span className={participant.balloon ? 'tiny-pill' : 'tiny-pill ghost'}>{participant.balloon ? 'Balão vivo' : 'Eliminado'}</span>
+              {participant.balloon && (
+                <button className="tiny-button" onClick={() => onBurstBalloon(participant.id)}>Estourar</button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="panel question-box">
+        <p className="eyebrow">Pergunta atual</p>
+        <h3>O que você mais valoriza em um relacionamento sério?</h3>
+        <div className="question-actions">
+          <button className="primary-button" onClick={onFinishRound}>Próxima rodada</button>
+          <button className="secondary-button" onClick={onGoToChat}>Ir para chat</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-.hero-card,
-.feature-panel {
-  width: min(100%, 520px);
-  background: rgba(15, 23, 42, 0.78);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 28px;
-  box-shadow: 0 30px 60px rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(14px);
+function ChatScreen({ user, onGoBack }: { user: UserProfile; onGoBack: () => void }) {
+  const messages = [
+    { from: 'Davi', text: 'Você me parece interessante. Como você costuma curtir o fim de semana?', direction: 'inbound' },
+    { from: user.name, text: 'Gosto de café, música ao vivo e viajar sem planejar tudo.', direction: 'outbound' },
+    { from: 'Davi', text: 'Perfeito. Também adoro gastronomia e cinema.', direction: 'inbound' },
+  ];
+
+  return (
+    <div className="page-panel">
+      <div className="chat-card panel">
+        <div className="chat-header">
+          <div>
+            <p className="eyebrow">Match ativo</p>
+            <h2>Davi</h2>
+          </div>
+          <button className="ghost-button" onClick={onGoBack}>Voltar</button>
+        </div>
+
+        <div className="message-list">
+          {messages.map((message, index) => (
+            <div key={index} className={message.direction === 'outbound' ? 'message outbound' : 'message inbound'}>
+              <strong>{message.from}</strong>
+              <p>{message.text}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="chat-input-row">
+          <input value="Escrever mensagem..." readOnly />
+          <button className="primary-button">Enviar</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-.hero-card {
-  padding: 2.25rem;
+function VipScreen({
+  selectedPlan,
+  setSelectedPlan,
+  onGoToDashboard,
+}: {
+  selectedPlan: 'free' | 'vip';
+  setSelectedPlan: (plan: 'free' | 'vip') => void;
+  onGoToDashboard: () => void;
+}) {
+  return (
+    <div className="page-panel">
+      <div className="panel pricing-card">
+        <div className="section-header">
+          <h2>Planos</h2>
+          <button className="ghost-button" onClick={onGoToDashboard}>Voltar ao painel</button>
+        </div>
+
+        <div className="price-grid">
+          <div className={selectedPlan === 'free' ? 'price-box selected' : 'price-box'} onClick={() => setSelectedPlan('free')}>
+            <h3>Gratuito</h3>
+            <p className="price">R$ 0</p>
+            <ul>
+              <li>3 salas por dia</li>
+              <li>Matches básicos</li>
+              <li>Chat após match</li>
+            </ul>
+          </div>
+
+          <div className={selectedPlan === 'vip' ? 'price-box selected vip-box' : 'price-box vip-box'} onClick={() => setSelectedPlan('vip')}>
+            <h3>VIP</h3>
+            <p className="price">R$ 25/mês</p>
+            <ul>
+              <li>Salas ilimitadas</li>
+              <li>Filtros avançados</li>
+              <li>Convites prioritários</li>
+              <li>Voucher e benefícios</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.4rem 0.8rem;
-  border-radius: 999px;
-  background: rgba(96, 165, 250, 0.18);
-  border: 1px solid rgba(147, 197, 253, 0.3);
-  color: #bfdbfe;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+function AdminScreen() {
+  return (
+    <div className="page-panel admin-shell">
+      <div className="panel">
+        <div className="section-header">
+          <h2>Painel administrativo</h2>
+          <span className="tiny-pill">Segurança</span>
+        </div>
+
+        <div className="metrics-grid">
+          {adminMetrics.map((metric) => (
+            <div key={metric.label} className="metric-box">
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+            </div>
+          ))}
+        </div>
+
+        <div className="admin-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Usuário</th>
+                <th>Status</th>
+                <th>Plano</th>
+                <th>Risco</th>
+              </tr>
+            </thead>
+            <tbody>
+              {adminUsers.map((user) => (
+                <tr key={user.name}>
+                  <td>{user.name}</td>
+                  <td>{user.status}</td>
+                  <td>{user.plan}</td>
+                  <td>{user.risk}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-h1 {
-  margin: 1rem 0 0.75rem;
-  font-size: clamp(2.5rem, 5vw, 4rem);
-  line-height: 1.05;
+function StatCard({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="stat-card panel">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </div>
+  );
 }
 
-p {
-  margin: 0;
-  color: #cbd5e1;
-  font-size: 1.05rem;
-}
-
-.actions {
-  display: flex;
-  gap: 1rem;
-  margin-top: 1.5rem;
-  flex-wrap: wrap;
-}
-
-button {
-  border: none;
-  border-radius: 12px;
-  padding: 0.85rem 1.4rem;
-  cursor: pointer;
-  transition: transform 0.2s ease, opacity 0.2s ease;
-}
-
-button:hover {
-  transform: translateY(-1px);
-}
-
-.primary {
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  color: white;
-  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.45);
-}
-
-.secondary {
-  background: rgba(148, 163, 184, 0.08);
-  color: #e2e8f0;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-}
-
-.stats {
-  margin-top: 2rem;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.stats div {
-  display: flex;
-  flex-direction: column;
-  padding: 1rem 0.75rem;
-  background: rgba(15, 118, 110, 0.08);
-  border: 1px solid rgba(94, 234, 212, 0.15);
-  border-radius: 16px;
-}
-
-.stats strong {
-  font-size: 1.3rem;
-  color: #f8fafc;
-}
-
-.stats span {
-  margin-top: 0.35rem;
-  color: #cbd5e1;
-  font-size: 0.8rem;
-}
-
-.feature-panel {
-  padding: 1.75rem;
-}
-
-.feature-panel h2 {
-  margin-top: 0;
-  margin-bottom: 1.25rem;
-  font-size: 1.4rem;
-}
-
-.services-grid {
-  display: grid;
-  gap: 0.9rem;
-}
-
-.service-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.9rem 1rem;
-  border-radius: 14px;
-  background: rgba(15, 23, 42, 0.9);
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  color: #e2e8f0;
-}
-
-.dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #34d399, #60a5fa);
-  box-shadow: 0 0 18px rgba(52, 211, 153, 0.7);
-}
-
-@media (max-width: 640px) {
-  .page-shell {
-    padding: 1rem;
-  }
-
-  .hero-card,
-  .feature-panel {
-    padding: 1.25rem;
-  }
-
-  .stats {
-    grid-template-columns: 1fr;
-  }
-}
+export default App;
